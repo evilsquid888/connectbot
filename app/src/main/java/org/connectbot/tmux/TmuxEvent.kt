@@ -36,17 +36,34 @@ sealed class TmuxEvent {
     data object SessionsChanged : TmuxEvent()
     data class SessionWindowChanged(val sessionId: String, val windowId: String) : TmuxEvent()
 
-    // Layout and pane mode
-    data class LayoutChanged(val windowId: String, val layout: String) : TmuxEvent()
+    // Layout: %layout-change @<wid> <layout> <visible-layout> <raw-flags>
+    data class LayoutChanged(
+        val windowId: String,
+        val layout: String,
+        val visibleLayout: String,
+        val rawFlags: String,
+    ) : TmuxEvent()
+
     data class PaneModeChanged(val paneId: String) : TmuxEvent()
 
     // Flow control
     data class Pause(val paneId: String) : TmuxEvent()
     data class Continue(val paneId: String) : TmuxEvent()
 
-    // Subscriptions
+    // Subscriptions: %subscription-changed <name> <session-id> <window-id> <window-index> <pane-id> : <value>
     data class SubscriptionChanged(val name: String, val value: String) : TmuxEvent()
 
-    // Client exit
-    data object Exit : TmuxEvent()
+    // Client notifications
+    data class ClientDetached(val client: String) : TmuxEvent()
+
+    // Paste buffer notifications
+    data class PasteBufferChanged(val bufferName: String) : TmuxEvent()
+    data class PasteBufferDeleted(val bufferName: String) : TmuxEvent()
+
+    // Error and message notifications
+    data class ConfigError(val error: String) : TmuxEvent()
+    data class Message(val message: String) : TmuxEvent()
+
+    // Client exit (with optional reason like "server exited", "detached")
+    data class Exit(val reason: String = "") : TmuxEvent()
 }

@@ -48,11 +48,16 @@ class TmuxControlModeParser {
             line.startsWith("%sessions-changed") -> _events.trySend(TmuxEvent.SessionsChanged)
             line.startsWith("%session-window-changed ") -> handleTwoArgs(line, 24) { a, b -> TmuxEvent.SessionWindowChanged(a, b) }
             line.startsWith("%pane-mode-changed ") -> handleSingleArg(line, 19) { TmuxEvent.PaneModeChanged(it) }
-            line.startsWith("%layout-change ") -> handleTwoArgs(line, 15) { a, b -> TmuxEvent.LayoutChanged(a, b) }
+            line.startsWith("%layout-change ") -> handleLayoutChange(line)
             line.startsWith("%pause ") -> handleSingleArg(line, 7) { TmuxEvent.Pause(it) }
             line.startsWith("%continue ") -> handleSingleArg(line, 10) { TmuxEvent.Continue(it) }
-            line.startsWith("%subscription-changed ") -> handleTwoArgs(line, 22) { a, b -> TmuxEvent.SubscriptionChanged(a, b) }
-            line.startsWith("%exit") -> _events.trySend(TmuxEvent.Exit)
+            line.startsWith("%subscription-changed ") -> handleSubscriptionChanged(line)
+            line.startsWith("%client-detached ") -> handleSingleArg(line, 17) { TmuxEvent.ClientDetached(it) }
+            line.startsWith("%paste-buffer-changed ") -> handleSingleArg(line, 22) { TmuxEvent.PasteBufferChanged(it) }
+            line.startsWith("%paste-buffer-deleted ") -> handleSingleArg(line, 22) { TmuxEvent.PasteBufferDeleted(it) }
+            line.startsWith("%config-error ") -> handleSingleArg(line, 14) { TmuxEvent.ConfigError(it) }
+            line.startsWith("%message ") -> handleSingleArg(line, 9) { TmuxEvent.Message(it) }
+            line.startsWith("%exit") -> handleExit(line)
             inBlock -> {
                 if (blockOutput.isNotEmpty()) blockOutput.append('\n')
                 blockOutput.append(line)
@@ -130,6 +135,46 @@ class TmuxControlModeParser {
         if (parts.size >= 3) {
             _events.trySend(TmuxEvent.ClientSessionChanged(parts[0], parts[1], parts[2]))
         }
+    }
+
+    /**
+     * Parse %layout-change: "%layout-change @<wid> <layout> <visible-layout> <raw-flags>"
+     * Four space-separated fields per tmux control-notify.c.
+     */
+    private fun handleLayoutChange(line: String) {
+        val parts = line.substring(15).split(' ', limit = 4)
+        when (parts.size) {
+            4 -> _events.trySend(TmuxEvent.LayoutChanged(parts[0], parts[1], parts[2], parts[3]))
+            // Older tmux versions may send fewer fields; be defensive
+            3 -> _events.trySend(TmuxEvent.LayoutChanged(parts[0], parts[1], parts[2], ""))
+            2 -> _events.trySend(TmuxEvent.LayoutChanged(parts[0], parts[1], "", ""))
+            else -> {} // malformed - ignore
+        }
+    }
+
+    /**
+     * Parse %subscription-changed.
+     * Format: "%subscription-changed <name> <session-id> <window-id> <window-index> <pane-id> : <value>"
+     * The value is everything after the " : " separator.
+     */
+    private fun handleSubscriptionChanged(line: String) {
+        val rest = line.substring(22) // skip "%subscription-changed "
+        val colonIdx = rest.indexOf(" : ")
+        if (colonIdx < 0) return
+        val nameAndMeta = rest.substring(0, colonIdx)
+        val value = rest.substring(colonIdx + 3)
+        // The name is the first token before the metadata
+        val spaceIdx = nameAndMeta.indexOf(' ')
+        val name = if (spaceIdx > 0) nameAndMeta.substring(0, spaceIdx) else nameAndMeta
+        _events.trySend(TmuxEvent.SubscriptionChanged(name, value))
+    }
+
+    /**
+     * Parse %exit: "%exit" or "%exit <reason>"
+     */
+    private fun handleExit(line: String) {
+        val reason = if (line.length > 5) line.substring(6) else ""
+        _events.trySend(TmuxEvent.Exit(reason))
     }
 
     // Helper for single-argument notifications

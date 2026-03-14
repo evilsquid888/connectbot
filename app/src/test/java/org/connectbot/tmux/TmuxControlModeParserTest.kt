@@ -147,10 +147,19 @@ class TmuxControlModeParserTest {
     }
 
     @Test
-    fun `parse exit notification`() = runTest {
+    fun `parse exit notification without reason`() = runTest {
         parser.feedLine("%exit")
         val event = parser.events.tryReceive().getOrNull()
-        assertThat(event).isEqualTo(TmuxEvent.Exit)
+        assertThat(event).isInstanceOf(TmuxEvent.Exit::class.java)
+        assertThat((event as TmuxEvent.Exit).reason).isEmpty()
+    }
+
+    @Test
+    fun `parse exit notification with reason`() = runTest {
+        parser.feedLine("%exit server exited")
+        val event = parser.events.tryReceive().getOrNull()
+        assertThat(event).isInstanceOf(TmuxEvent.Exit::class.java)
+        assertThat((event as TmuxEvent.Exit).reason).isEqualTo("server exited")
     }
 
     @Test
@@ -170,13 +179,16 @@ class TmuxControlModeParserTest {
     }
 
     @Test
-    fun `parse layout-change notification`() = runTest {
-        parser.feedLine("%layout-change @0 4a0a,159x44,0,0{79x44,0,0,0,79x44,80,0,1}")
+    fun `parse layout-change notification with all 4 fields`() = runTest {
+        // tmux sends: %layout-change @<wid> <layout> <visible-layout> <raw-flags>
+        parser.feedLine("%layout-change @0 4a0a,159x44,0,0{79x44,0,0,0,79x44,80,0,1} 4a0a,159x44,0,0{79x44,0,0,0,79x44,80,0,1} *")
         val event = parser.events.tryReceive().getOrNull()
         assertThat(event).isInstanceOf(TmuxEvent.LayoutChanged::class.java)
         val lc = event as TmuxEvent.LayoutChanged
         assertThat(lc.windowId).isEqualTo("@0")
         assertThat(lc.layout).isEqualTo("4a0a,159x44,0,0{79x44,0,0,0,79x44,80,0,1}")
+        assertThat(lc.visibleLayout).isEqualTo("4a0a,159x44,0,0{79x44,0,0,0,79x44,80,0,1}")
+        assertThat(lc.rawFlags).isEqualTo("*")
     }
 
     @Test
@@ -204,13 +216,24 @@ class TmuxControlModeParserTest {
     }
 
     @Test
-    fun `parse subscription-changed notification`() = runTest {
-        parser.feedLine("%subscription-changed my-sub some value here")
+    fun `parse subscription-changed notification with colon separator`() = runTest {
+        // tmux format: %subscription-changed <name> <session-id> <window-id> <window-index> <pane-id> : <value>
+        parser.feedLine("%subscription-changed my-sub \$0 @0 0 %0 : the actual value")
         val event = parser.events.tryReceive().getOrNull()
         assertThat(event).isInstanceOf(TmuxEvent.SubscriptionChanged::class.java)
         val sc = event as TmuxEvent.SubscriptionChanged
         assertThat(sc.name).isEqualTo("my-sub")
-        assertThat(sc.value).isEqualTo("some value here")
+        assertThat(sc.value).isEqualTo("the actual value")
+    }
+
+    @Test
+    fun `parse subscription-changed for session scope`() = runTest {
+        // Session scope: %subscription-changed <name> $<sid> - - - : <value>
+        parser.feedLine("%subscription-changed my-sub \$0 - - - : session value")
+        val event = parser.events.tryReceive().getOrNull()
+        val sc = event as TmuxEvent.SubscriptionChanged
+        assertThat(sc.name).isEqualTo("my-sub")
+        assertThat(sc.value).isEqualTo("session value")
     }
 
     // --- Output Parsing ---
@@ -322,6 +345,47 @@ class TmuxControlModeParserTest {
         assertThat(event2).isInstanceOf(TmuxEvent.CommandResponse::class.java)
         val cr = event2 as TmuxEvent.CommandResponse
         assertThat(cr.output).isEqualTo("block body")
+    }
+
+    // --- New notification types (verified against tmux source) ---
+
+    @Test
+    fun `parse client-detached notification`() = runTest {
+        parser.feedLine("%client-detached /dev/pts/1")
+        val event = parser.events.tryReceive().getOrNull()
+        assertThat(event).isInstanceOf(TmuxEvent.ClientDetached::class.java)
+        assertThat((event as TmuxEvent.ClientDetached).client).isEqualTo("/dev/pts/1")
+    }
+
+    @Test
+    fun `parse paste-buffer-changed notification`() = runTest {
+        parser.feedLine("%paste-buffer-changed buffer0")
+        val event = parser.events.tryReceive().getOrNull()
+        assertThat(event).isInstanceOf(TmuxEvent.PasteBufferChanged::class.java)
+        assertThat((event as TmuxEvent.PasteBufferChanged).bufferName).isEqualTo("buffer0")
+    }
+
+    @Test
+    fun `parse paste-buffer-deleted notification`() = runTest {
+        parser.feedLine("%paste-buffer-deleted buffer0")
+        val event = parser.events.tryReceive().getOrNull()
+        assertThat(event).isInstanceOf(TmuxEvent.PasteBufferDeleted::class.java)
+    }
+
+    @Test
+    fun `parse config-error notification`() = runTest {
+        parser.feedLine("%config-error /home/user/.tmux.conf:5: unknown option")
+        val event = parser.events.tryReceive().getOrNull()
+        assertThat(event).isInstanceOf(TmuxEvent.ConfigError::class.java)
+        assertThat((event as TmuxEvent.ConfigError).error).isEqualTo("/home/user/.tmux.conf:5: unknown option")
+    }
+
+    @Test
+    fun `parse message notification`() = runTest {
+        parser.feedLine("%message hello world")
+        val event = parser.events.tryReceive().getOrNull()
+        assertThat(event).isInstanceOf(TmuxEvent.Message::class.java)
+        assertThat((event as TmuxEvent.Message).message).isEqualTo("hello world")
     }
 
     // --- Edge Cases ---
