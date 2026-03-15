@@ -56,8 +56,12 @@ class TmuxCommandSender(
 
     /**
      * Send a tmux command without waiting for a response (fire-and-forget).
+     * Still enqueues a deferred to maintain FIFO correlation with tmux's response.
      */
     fun sendCommandFire(cmd: String) {
+        synchronized(pendingLock) {
+            pendingResponses.addLast(CompletableDeferred())
+        }
         writeFn("$cmd\n".toByteArray(Charsets.UTF_8))
     }
 

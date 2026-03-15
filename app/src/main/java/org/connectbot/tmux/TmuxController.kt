@@ -7,6 +7,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.connectbot.di.CoroutineDispatchers
 import timber.log.Timber
@@ -215,27 +216,39 @@ class TmuxController(
     }
 
     private fun handleWindowAdd(windowId: String) {
-        _windows.value = _windows.value + TmuxWindowState(
-            windowId = windowId,
-            name = windowId // Will be updated by WindowRenamed
-        )
+        _windows.update { current ->
+            current + TmuxWindowState(
+                windowId = windowId,
+                name = windowId // Will be updated by WindowRenamed
+            )
+        }
     }
 
     private fun handleWindowClose(windowId: String) {
-        _windows.value = _windows.value.filter { it.windowId != windowId }
-        // Clean up panes associated with this window's layout
-        // (we'd need layout info to know which panes to remove)
+        _windows.update { current ->
+            val closingWindow = current.find { it.windowId == windowId }
+            closingWindow?.layout?.let { layout ->
+                collectPaneIds(layout).forEach { paneId -> panes.remove(paneId) }
+            }
+            current.filter { it.windowId != windowId }
+        }
+    }
+
+    private fun collectPaneIds(node: TmuxLayoutNode): List<String> = when (node) {
+        is TmuxLayoutNode.Leaf -> listOf("%${node.paneId}")
+        is TmuxLayoutNode.HSplit -> node.children.flatMap { collectPaneIds(it) }
+        is TmuxLayoutNode.VSplit -> node.children.flatMap { collectPaneIds(it) }
     }
 
     private fun handleWindowRenamed(windowId: String, name: String) {
-        _windows.value = _windows.value.map {
-            if (it.windowId == windowId) it.copy(name = name) else it
+        _windows.update { current ->
+            current.map { if (it.windowId == windowId) it.copy(name = name) else it }
         }
     }
 
     private fun handleWindowPaneChanged(windowId: String, paneId: String) {
-        _windows.value = _windows.value.map {
-            if (it.windowId == windowId) it.copy(activePaneId = paneId) else it
+        _windows.update { current ->
+            current.map { if (it.windowId == windowId) it.copy(activePaneId = paneId) else it }
         }
     }
 
@@ -250,8 +263,8 @@ class TmuxController(
         // Create any new panes referenced in the layout
         createPanesFromLayout(layoutNode)
 
-        _windows.value = _windows.value.map {
-            if (it.windowId == windowId) it.copy(layout = layoutNode) else it
+        _windows.update { current ->
+            current.map { if (it.windowId == windowId) it.copy(layout = layoutNode) else it }
         }
     }
 

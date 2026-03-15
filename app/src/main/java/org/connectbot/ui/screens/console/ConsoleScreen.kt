@@ -270,7 +270,12 @@ fun ConsoleScreen(
         }
     }
 
-    val currentBridge = uiState.bridges.getOrNull(uiState.currentBridgeIndex)
+    val currentTab = uiState.tabs.getOrNull(uiState.currentBridgeIndex)
+    val currentBridge = when (currentTab) {
+        is ConsoleTab.HostTab -> currentTab.bridge
+        is ConsoleTab.TmuxWindowTab -> currentTab.gatewayBridge
+        null -> null
+    }
     // These values are computed from bridge state and will recompute when uiState.revision changes
     val sessionOpen = currentBridge?.isSessionOpen == true
     val disconnected = currentBridge?.isDisconnected == true

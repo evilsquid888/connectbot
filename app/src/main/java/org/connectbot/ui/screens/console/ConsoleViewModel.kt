@@ -274,7 +274,7 @@ class ConsoleViewModel @Inject constructor(
     }
 
     fun selectBridge(index: Int) {
-        if (index in _uiState.value.bridges.indices) {
+        if (index in _uiState.value.tabs.indices) {
             _uiState.update { it.copy(currentBridgeIndex = index) }
         }
     }
