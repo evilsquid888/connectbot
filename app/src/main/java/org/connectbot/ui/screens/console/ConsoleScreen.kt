@@ -334,19 +334,22 @@ fun ConsoleScreen(
         contentWindowInsets = ScaffoldDefaults.contentWindowInsets
             .union(WindowInsets.imeAnimationTarget)
     ) { innerPadding ->
-        // Show tabs if multiple terminals
-        if (uiState.bridges.size > 1) {
+        // Show tabs if multiple terminals or tmux windows
+        if (uiState.tabs.size > 1) {
             PrimaryTabRow(
                 selectedTabIndex = uiState.currentBridgeIndex,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                uiState.bridges.forEachIndexed { index, bridge ->
+                uiState.tabs.forEachIndexed { index, tab ->
                     Tab(
                         selected = index == uiState.currentBridgeIndex,
                         onClick = { viewModel.selectBridge(index) },
                         text = {
                             Text(
-                                bridge.host.nickname,
+                                when (tab) {
+                                    is ConsoleTab.HostTab -> tab.bridge.host.nickname
+                                    is ConsoleTab.TmuxWindowTab -> tab.windowName
+                                },
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -426,13 +429,12 @@ fun ConsoleScreen(
                     LoadingScreen(modifier = Modifier.fillMaxSize())
                 }
 
-                uiState.bridges.isNotEmpty() -> {
-                    // TODO(Terminal): Re-implement support for switching between terminals
-                    // For now, just show the current bridge directly without HorizontalPager
-                    // to avoid accessibility issues. Maybe a tab strip across the top for
-                    // small screen devices and a list of hosts on the left for large screen.
-
-                    val bridge = uiState.bridges[uiState.currentBridgeIndex]
+                uiState.tabs.isNotEmpty() -> {
+                    val currentTab = uiState.tabs[uiState.currentBridgeIndex]
+                    val bridge = when (currentTab) {
+                        is ConsoleTab.HostTab -> currentTab.bridge
+                        is ConsoleTab.TmuxWindowTab -> currentTab.gatewayBridge
+                    }
 
                     // Terminal view fills entire space with insets padding
                     // to avoid content being cut off by screen curves/notches
@@ -460,34 +462,60 @@ fun ConsoleScreen(
                             }
                         }
 
-                        Terminal(
-                            terminalEmulator = bridge.terminalEmulator,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(
-                                    bottom = if (keyboardAlwaysVisible) TERMINAL_KEYBOARD_HEIGHT_DP.dp else 0.dp
-                                ),
-                            typeface = fontResult.typeface,
-                            initialFontSize = fontSize.sp,
-                            keyboardEnabled = true,
-                            showSoftKeyboard = showSoftwareKeyboard,
-                            focusRequester = termFocusRequester,
-                            forcedSize = forceSize,
-                            modifierManager = bridge.keyHandler,
-                            onSelectionControllerAvailable = { selectionController = it },
-                            onTerminalTap = { handleTerminalInteraction() },
-                            onImeVisibilityChanged = { visible ->
-                                imeVisible = visible
-                            },
-                            onHyperlinkClick = { url ->
-                                // Open OSC8 hyperlink in browser
-                                val intent = android.content.Intent(
-                                    android.content.Intent.ACTION_VIEW,
-                                    url.toUri()
-                                )
-                                context.startActivity(intent)
+                        when (currentTab) {
+                            is ConsoleTab.TmuxWindowTab -> {
+                                // Show split-pane layout for tmux window
+                                val windowState = currentTab.controller.windows
+                                    .collectAsState().value
+                                    .find { it.windowId == currentTab.windowId }
+
+                                val layout = windowState?.layout
+                                if (layout != null) {
+                                    TmuxPaneLayout(
+                                        layoutNode = layout,
+                                        controller = currentTab.controller,
+                                        activePaneId = windowState.activePaneId,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(
+                                                bottom = if (keyboardAlwaysVisible) TERMINAL_KEYBOARD_HEIGHT_DP.dp else 0.dp
+                                            ),
+                                        onPaneTap = { handleTerminalInteraction() },
+                                    )
+                                }
                             }
-                        )
+
+                            is ConsoleTab.HostTab -> {
+                                Terminal(
+                                    terminalEmulator = bridge.terminalEmulator,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(
+                                            bottom = if (keyboardAlwaysVisible) TERMINAL_KEYBOARD_HEIGHT_DP.dp else 0.dp
+                                        ),
+                                    typeface = fontResult.typeface,
+                                    initialFontSize = fontSize.sp,
+                                    keyboardEnabled = true,
+                                    showSoftKeyboard = showSoftwareKeyboard,
+                                    focusRequester = termFocusRequester,
+                                    forcedSize = forceSize,
+                                    modifierManager = bridge.keyHandler,
+                                    onSelectionControllerAvailable = { selectionController = it },
+                                    onTerminalTap = { handleTerminalInteraction() },
+                                    onImeVisibilityChanged = { visible ->
+                                        imeVisible = visible
+                                    },
+                                    onHyperlinkClick = { url ->
+                                        // Open OSC8 hyperlink in browser
+                                        val intent = android.content.Intent(
+                                            android.content.Intent.ACTION_VIEW,
+                                            url.toUri()
+                                        )
+                                        context.startActivity(intent)
+                                    }
+                                )
+                            }
+                        }
 
                         // Set up text input request callback from bridge (for camera button)
                         SideEffect {
