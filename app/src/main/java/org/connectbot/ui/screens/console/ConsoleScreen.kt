@@ -485,6 +485,10 @@ fun ConsoleScreen(
                                             .padding(
                                                 bottom = if (keyboardAlwaysVisible) TERMINAL_KEYBOARD_HEIGHT_DP.dp else 0.dp
                                             ),
+                                        showSoftKeyboard = showSoftwareKeyboard,
+                                        typeface = fontResult.typeface,
+                                        fontSize = fontSize.sp,
+                                        modifierManager = bridge.keyHandler,
                                         onPaneTap = { handleTerminalInteraction() }
                                     )
                                 }
@@ -787,6 +791,23 @@ fun ConsoleScreen(
                                     },
                                     enabled = sessionOpen
                                 )
+                            }
+
+                            // Tmux actions (only when active tab is a tmux window)
+                            if (currentTab is ConsoleTab.TmuxWindowTab) {
+                                val tmuxScope = rememberCoroutineScope()
+                                val tmuxActions = buildTmuxMenuActions(
+                                    controller = currentTab.controller,
+                                    windowId = currentTab.windowId,
+                                    scope = tmuxScope,
+                                    onDismiss = { showMenu = false }
+                                )
+                                tmuxActions.forEach { action ->
+                                    DropdownMenuItem(
+                                        text = { Text(action.label) },
+                                        onClick = action.onClick
+                                    )
+                                }
                             }
 
                             // Fullscreen toggle

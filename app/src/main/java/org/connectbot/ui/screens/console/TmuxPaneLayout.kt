@@ -1,5 +1,6 @@
 package org.connectbot.ui.screens.console
 
+import android.graphics.Typeface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -12,8 +13,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.connectbot.service.TerminalKeyListener
 import org.connectbot.terminal.Terminal
 import org.connectbot.tmux.TmuxController
 import org.connectbot.tmux.TmuxLayoutNode
@@ -27,6 +30,10 @@ import org.connectbot.tmux.TmuxLayoutNode
  * @param layoutNode the layout tree root
  * @param controller the tmux controller for looking up pane emulators
  * @param activePaneId the currently active pane ID (highlighted with a border)
+ * @param showSoftKeyboard whether to show the soft keyboard
+ * @param typeface typeface for terminal rendering
+ * @param fontSize font size for terminal rendering
+ * @param modifierManager key listener for handling Ctrl/Alt/Meta modifiers
  * @param onPaneTap callback when any pane is tapped
  */
 @Composable
@@ -35,6 +42,10 @@ fun TmuxPaneLayout(
     controller: TmuxController,
     activePaneId: String?,
     modifier: Modifier = Modifier,
+    showSoftKeyboard: Boolean = false,
+    typeface: Typeface? = null,
+    fontSize: TextUnit = 10.sp,
+    modifierManager: TerminalKeyListener? = null,
     onPaneTap: (() -> Unit)? = null
 ) {
     when (layoutNode) {
@@ -59,8 +70,11 @@ fun TmuxPaneLayout(
                     Terminal(
                         terminalEmulator = emulator,
                         modifier = Modifier.fillMaxSize(),
-                        initialFontSize = 10.sp,
+                        typeface = typeface ?: Typeface.MONOSPACE,
+                        initialFontSize = fontSize,
                         keyboardEnabled = true,
+                        showSoftKeyboard = showSoftKeyboard && isActive,
+                        modifierManager = modifierManager,
                         onTerminalTap = onPaneTap ?: {}
                     )
                 }
@@ -72,7 +86,6 @@ fun TmuxPaneLayout(
                 layoutNode.children.forEachIndexed { index, child ->
                     val weight = child.height.toFloat() / layoutNode.height.coerceAtLeast(1)
                     if (index > 0) {
-                        // Divider between horizontal panes
                         Box(
                             modifier = Modifier
                                 .height(1.dp)
@@ -84,6 +97,10 @@ fun TmuxPaneLayout(
                         controller = controller,
                         activePaneId = activePaneId,
                         modifier = Modifier.weight(weight),
+                        showSoftKeyboard = showSoftKeyboard,
+                        typeface = typeface,
+                        fontSize = fontSize,
+                        modifierManager = modifierManager,
                         onPaneTap = onPaneTap
                     )
                 }
@@ -95,7 +112,6 @@ fun TmuxPaneLayout(
                 layoutNode.children.forEachIndexed { index, child ->
                     val weight = child.width.toFloat() / layoutNode.width.coerceAtLeast(1)
                     if (index > 0) {
-                        // Divider between vertical panes
                         Box(
                             modifier = Modifier
                                 .width(1.dp)
@@ -107,6 +123,10 @@ fun TmuxPaneLayout(
                         controller = controller,
                         activePaneId = activePaneId,
                         modifier = Modifier.weight(weight),
+                        showSoftKeyboard = showSoftKeyboard,
+                        typeface = typeface,
+                        fontSize = fontSize,
+                        modifierManager = modifierManager,
                         onPaneTap = onPaneTap
                     )
                 }

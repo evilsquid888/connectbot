@@ -61,6 +61,9 @@ class TmuxController(
     // Pane ID -> TmuxPane
     private val panes = ConcurrentHashMap<String, TmuxPane>()
 
+    // Panes currently paused by flow control
+    private val pausedPanes = ConcurrentHashMap.newKeySet<String>()
+
     /**
      * Start the event processing loop.
      * Call this after the parser is set up and ready to receive events.
@@ -75,15 +78,30 @@ class TmuxController(
      * Send initial commands to tmux to populate window/pane state.
      * Should be called after start() when the control mode is first activated.
      */
+
+    /** Default client size when terminal dimensions are unknown. */
+    var clientCols: Int = 80
+    var clientRows: Int = 24
+
     suspend fun sendInitialCommands() {
         try {
             val version = sender.getVersion()
             Timber.d("tmux version: $version")
 
+            // Set tmux client size to match Android terminal dimensions
+            sender.resizeClient(clientCols, clientRows)
+
             val windowOutput = sender.listWindows(
                 "#{window_id} #{window_name} #{window_layout} #{window_active}"
             )
             parseAndCreateWindows(windowOutput)
+
+            // Enable flow control (tmux 3.2+, silently ignored on older versions)
+            try {
+                sender.enableFlowControl()
+            } catch (e: Exception) {
+                Timber.d("Flow control not supported: ${e.message}")
+            }
         } catch (e: Exception) {
             Timber.e(e, "Failed to send initial tmux commands")
         }
@@ -132,8 +150,19 @@ class TmuxController(
                 if (paneActive == "1") activePaneId = paneId
 
                 if (!panes.containsKey(paneId)) {
-                    panes[paneId] = paneFactory(paneId, cols, rows) { data ->
+                    val pane = paneFactory(paneId, cols, rows) { data ->
                         routeInput(paneId, data)
+                    }
+                    panes[paneId] = pane
+
+                    // Capture existing pane content (for reattach scenarios)
+                    try {
+                        val content = sender.capturePane(paneId)
+                        if (content.isNotEmpty()) {
+                            pane.writeOutput(content.toByteArray(Charsets.UTF_8))
+                        }
+                    } catch (e: Exception) {
+                        Timber.d("capture-pane failed for $paneId: ${e.message}")
                     }
                 }
             }
@@ -187,9 +216,18 @@ class TmuxController(
 
             is TmuxEvent.Exit -> handleExit(event.reason)
 
-            is TmuxEvent.Pause -> { /* TODO: flow control */ }
+            is TmuxEvent.Pause -> pausedPanes.add(event.paneId)
 
-            is TmuxEvent.Continue -> { /* TODO: flow control */ }
+            is TmuxEvent.Continue -> {
+                pausedPanes.remove(event.paneId)
+                scope.launch {
+                    try {
+                        sender.resumePane(event.paneId)
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to resume pane ${event.paneId}")
+                    }
+                }
+            }
 
             // Events we don't need to handle in the controller
             else -> {}
@@ -211,6 +249,7 @@ class TmuxController(
      */
     fun routeInput(paneId: String, data: ByteArray) {
         if (data.isEmpty()) return
+        if (pausedPanes.contains(paneId)) return
         val hex = data.joinToString(" ") { "%02x".format(it) }
         sender.sendCommandFire("send-keys -t '$paneId' -H $hex")
     }

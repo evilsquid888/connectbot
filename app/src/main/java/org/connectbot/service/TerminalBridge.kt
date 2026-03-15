@@ -812,6 +812,11 @@ class TerminalBridge {
         tmuxController = controller
         isTmuxGateway = true
 
+        // Set client size from the gateway terminal's current dimensions
+        val dims = terminalEmulator.dimensions
+        controller.clientCols = dims.columns
+        controller.clientRows = dims.rows
+
         // Wire the relay to feed lines to the controller's parser
         relay.tmuxParser = controller.parser
 
