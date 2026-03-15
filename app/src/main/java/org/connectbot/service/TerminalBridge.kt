@@ -48,6 +48,7 @@ import org.connectbot.di.CoroutineDispatchers
 import org.connectbot.terminal.ProgressState
 import org.connectbot.terminal.TerminalEmulator
 import org.connectbot.terminal.TerminalEmulatorFactory
+import org.connectbot.tmux.TmuxController
 import org.connectbot.transport.AbsTransport
 import org.connectbot.transport.SSH
 import org.connectbot.transport.TransportFactory
@@ -134,6 +135,14 @@ class TerminalBridge {
     data class ProgressInfo(val state: ProgressState, val progress: Int)
     private val _progressState = MutableStateFlow<ProgressInfo?>(null)
     val progressState: StateFlow<ProgressInfo?> = _progressState.asStateFlow()
+
+    /** True when this bridge is acting as a tmux control mode gateway. */
+    var isTmuxGateway: Boolean = false
+        private set
+
+    /** The tmux controller when in control mode, null otherwise. */
+    var tmuxController: TmuxController? = null
+        private set
 
     private var disconnected = false
     private var awaitingClose = false
@@ -543,7 +552,9 @@ class TerminalBridge {
         if (isSessionOpen) {
             // create thread to relay incoming connection data to buffer
             transport?.let { t ->
-                relay = Relay(this, t, dispatchers, encoding)
+                relay = Relay(this, t, dispatchers, encoding).also { r ->
+                    r.onTmuxControlModeDetected = { enterTmuxControlMode(r) }
+                }
                 scope.launch {
                     relay?.start()
                 }
@@ -779,6 +790,52 @@ class TerminalBridge {
 //    }
 
     /**
+     * Enter tmux control mode. Called by the Relay when the DCS sequence is detected.
+     * Creates a [TmuxController], wires it to the relay's parser, and hides this
+     * bridge from the UI (it becomes a "gateway").
+     */
+    private fun enterTmuxControlMode(relay: Relay) {
+        Timber.i("Entering tmux control mode for ${host.nickname}")
+
+        val writeFn: (ByteArray) -> Unit = { data ->
+            transportOperations.trySend(TransportOperation.WriteData(data))
+        }
+
+        val controller = TmuxController(
+            writeFn = writeFn,
+            dispatchers = dispatchers,
+            defaultFgColor = androidx.compose.ui.graphics.Color(fullColorPalette[defaultFg]),
+            defaultBgColor = androidx.compose.ui.graphics.Color(fullColorPalette[defaultBg]),
+            onExitControlMode = { exitTmuxControlMode() },
+        )
+
+        tmuxController = controller
+        isTmuxGateway = true
+
+        // Wire the relay to feed lines to the controller's parser
+        relay.tmuxParser = controller.parser
+
+        // Start the controller's event processing loop and initial commands
+        controller.start()
+        scope.launch {
+            controller.sendInitialCommands()
+        }
+
+        // Notify manager so UI updates
+        manager.notifyBridgeStateChanged()
+    }
+
+    /**
+     * Exit tmux control mode. Reverts the bridge to normal terminal mode.
+     */
+    private fun exitTmuxControlMode() {
+        Timber.i("Exiting tmux control mode for ${host.nickname}")
+        tmuxController = null
+        isTmuxGateway = false
+        manager.notifyBridgeStateChanged()
+    }
+
+    /**
      * Clean up resources when bridge is being destroyed.
      * Releases bitmap and clears parent reference to prevent memory leaks.
      */
@@ -786,6 +843,10 @@ class TerminalBridge {
         // Cancel grace period if active
         networkGracePeriodJob?.cancel()
         inGracePeriod = false
+
+        tmuxController?.cleanup()
+        tmuxController = null
+        isTmuxGateway = false
 
         profileObservationJob?.cancel()
         transportOperations.close()

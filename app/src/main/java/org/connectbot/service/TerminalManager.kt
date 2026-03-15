@@ -86,6 +86,16 @@ class TerminalManager :
     private val _bridgesFlow = MutableStateFlow<List<TerminalBridge>>(emptyList())
     val bridgesFlow: StateFlow<List<TerminalBridge>> = _bridgesFlow.asStateFlow()
 
+    /**
+     * Re-emit the bridges flow to notify observers of state changes (e.g., tmux control mode).
+     * Called by [TerminalBridge] when entering or exiting tmux control mode.
+     */
+    fun notifyBridgeStateChanged() {
+        synchronized(_bridges) {
+            _bridgesFlow.value = _bridges.toList()
+        }
+    }
+
     private val hostBridgeMap: MutableMap<Host, WeakReference<TerminalBridge>> = HashMap()
     private val nicknameBridgeMap: MutableMap<String, WeakReference<TerminalBridge>> = HashMap()
 
