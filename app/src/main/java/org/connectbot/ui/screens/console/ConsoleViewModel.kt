@@ -21,6 +21,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,10 +32,22 @@ import org.connectbot.di.CoroutineDispatchers
 import org.connectbot.service.TerminalBridge
 import org.connectbot.service.TerminalManager
 import org.connectbot.terminal.ProgressState
+import org.connectbot.tmux.TmuxController
 import javax.inject.Inject
+
+sealed class ConsoleTab {
+    data class HostTab(val bridge: TerminalBridge) : ConsoleTab()
+    data class TmuxWindowTab(
+        val gatewayBridge: TerminalBridge,
+        val controller: TmuxController,
+        val windowId: String,
+        val windowName: String,
+    ) : ConsoleTab()
+}
 
 data class ConsoleUiState(
     val bridges: List<TerminalBridge> = emptyList(),
+    val tabs: List<ConsoleTab> = emptyList(),
     val currentBridgeIndex: Int = 0,
     val isLoading: Boolean = true,
     val error: String? = null,
@@ -65,6 +78,14 @@ class ConsoleViewModel @Inject constructor(
                     updateBridges(bridges)
                     subscribeToActiveBridgeBells(bridges)
                     subscribeToActiveBridgeProgress(bridges)
+                }
+            }
+
+            // Also observe bridges for tmux controller changes
+            viewModelScope.launch {
+                manager.bridgesFlow.collect { bridges ->
+                    // When bridges change, set up observation of any tmux controllers
+                    observeTmuxControllers(bridges)
                 }
             }
 
@@ -183,9 +204,12 @@ class ConsoleViewModel @Inject constructor(
 
         _uiState.update {
             val newBridges = filteredBridges.ifEmpty { allBridges }
-            val newIndex = if (it.currentBridgeIndex >= newBridges.size) {
-                // Adjust index if it's now out of range
-                (newBridges.size - 1).coerceAtLeast(0)
+
+            // Build unified tab list
+            val tabs = buildTabList(newBridges)
+
+            val newIndex = if (it.currentBridgeIndex >= tabs.size) {
+                (tabs.size - 1).coerceAtLeast(0)
             } else {
                 it.currentBridgeIndex
             }
@@ -200,10 +224,52 @@ class ConsoleViewModel @Inject constructor(
 
             it.copy(
                 bridges = newBridges,
+                tabs = tabs,
                 currentBridgeIndex = newIndex,
                 isLoading = if (shouldStopLoading) false else it.isLoading,
                 error = null
             )
+        }
+    }
+
+    private fun buildTabList(bridges: List<TerminalBridge>): List<ConsoleTab> {
+        val tabs = mutableListOf<ConsoleTab>()
+        for (bridge in bridges) {
+            val controller = bridge.tmuxController
+            if (bridge.isTmuxGateway && controller != null) {
+                // Replace gateway bridge with one tab per tmux window
+                for (window in controller.windows.value) {
+                    tabs.add(
+                        ConsoleTab.TmuxWindowTab(
+                            gatewayBridge = bridge,
+                            controller = controller,
+                            windowId = window.windowId,
+                            windowName = window.name,
+                        )
+                    )
+                }
+            } else {
+                tabs.add(ConsoleTab.HostTab(bridge))
+            }
+        }
+        return tabs
+    }
+
+    private var tmuxObservationJob: Job? = null
+
+    private fun observeTmuxControllers(bridges: List<TerminalBridge>) {
+        tmuxObservationJob?.cancel()
+        tmuxObservationJob = viewModelScope.launch {
+            bridges.forEach { bridge ->
+                bridge.tmuxController?.let { controller ->
+                    launch {
+                        controller.windows.collect {
+                            // Rebuild tab list when tmux windows change
+                            updateBridges(terminalManager?.bridgesFlow?.value ?: emptyList())
+                        }
+                    }
+                }
+            }
         }
     }
 
