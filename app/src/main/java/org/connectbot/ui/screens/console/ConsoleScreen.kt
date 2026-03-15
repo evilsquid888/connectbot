@@ -480,7 +480,7 @@ fun ConsoleScreen(
                                             .padding(
                                                 bottom = if (keyboardAlwaysVisible) TERMINAL_KEYBOARD_HEIGHT_DP.dp else 0.dp
                                             ),
-                                        onPaneTap = { handleTerminalInteraction() },
+                                        onPaneTap = { handleTerminalInteraction() }
                                     )
                                 }
                             }

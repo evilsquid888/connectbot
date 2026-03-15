@@ -31,33 +31,61 @@ class TmuxControlModeParser {
     fun feedLine(line: String) {
         when {
             line.startsWith("%begin ") -> handleBegin(line)
+
             line.startsWith("%end ") -> handleEnd(false)
+
             line.startsWith("%error ") -> handleEnd(true)
+
             line.startsWith("%output ") -> handleOutput(line)
+
             line.startsWith("%extended-output ") -> handleExtendedOutput(line)
+
             line.startsWith("%window-add ") -> handleSingleArg(line, 12) { TmuxEvent.WindowAdd(it) }
+
             line.startsWith("%window-close ") -> handleSingleArg(line, 14) { TmuxEvent.WindowClose(it) }
+
             line.startsWith("%window-renamed ") -> handleTwoArgs(line, 16) { a, b -> TmuxEvent.WindowRenamed(a, b) }
+
             line.startsWith("%unlinked-window-add ") -> handleSingleArg(line, 21) { TmuxEvent.UnlinkedWindowAdd(it) }
+
             line.startsWith("%unlinked-window-close ") -> handleSingleArg(line, 23) { TmuxEvent.UnlinkedWindowClose(it) }
+
             line.startsWith("%unlinked-window-renamed ") -> handleTwoArgs(line, 25) { a, b -> TmuxEvent.UnlinkedWindowRenamed(a, b) }
+
             line.startsWith("%window-pane-changed ") -> handleTwoArgs(line, 21) { a, b -> TmuxEvent.WindowPaneChanged(a, b) }
+
             line.startsWith("%session-changed ") -> handleTwoArgs(line, 17) { a, b -> TmuxEvent.SessionChanged(a, b) }
+
             line.startsWith("%client-session-changed ") -> handleClientSessionChanged(line)
+
             line.startsWith("%session-renamed ") -> handleTwoArgs(line, 17) { a, b -> TmuxEvent.SessionRenamed(a, b) }
+
             line.startsWith("%sessions-changed") -> _events.trySend(TmuxEvent.SessionsChanged)
+
             line.startsWith("%session-window-changed ") -> handleTwoArgs(line, 24) { a, b -> TmuxEvent.SessionWindowChanged(a, b) }
+
             line.startsWith("%pane-mode-changed ") -> handleSingleArg(line, 19) { TmuxEvent.PaneModeChanged(it) }
+
             line.startsWith("%layout-change ") -> handleLayoutChange(line)
+
             line.startsWith("%pause ") -> handleSingleArg(line, 7) { TmuxEvent.Pause(it) }
+
             line.startsWith("%continue ") -> handleSingleArg(line, 10) { TmuxEvent.Continue(it) }
+
             line.startsWith("%subscription-changed ") -> handleSubscriptionChanged(line)
+
             line.startsWith("%client-detached ") -> handleSingleArg(line, 17) { TmuxEvent.ClientDetached(it) }
+
             line.startsWith("%paste-buffer-changed ") -> handleSingleArg(line, 22) { TmuxEvent.PasteBufferChanged(it) }
+
             line.startsWith("%paste-buffer-deleted ") -> handleSingleArg(line, 22) { TmuxEvent.PasteBufferDeleted(it) }
+
             line.startsWith("%config-error ") -> handleSingleArg(line, 14) { TmuxEvent.ConfigError(it) }
+
             line.startsWith("%message ") -> handleSingleArg(line, 9) { TmuxEvent.Message(it) }
+
             line.startsWith("%exit") -> handleExit(line)
+
             inBlock -> {
                 if (blockOutput.isNotEmpty()) blockOutput.append('\n')
                 blockOutput.append(line)
@@ -87,8 +115,8 @@ class TmuxControlModeParser {
                 TmuxEvent.CommandResponse(
                     commandNum = blockCommandNum,
                     output = blockOutput.toString(),
-                    isError = isError,
-                ),
+                    isError = isError
+                )
             )
             inBlock = false
             blockOutput.clear()
@@ -145,9 +173,12 @@ class TmuxControlModeParser {
         val parts = line.substring(15).split(' ', limit = 4)
         when (parts.size) {
             4 -> _events.trySend(TmuxEvent.LayoutChanged(parts[0], parts[1], parts[2], parts[3]))
+
             // Older tmux versions may send fewer fields; be defensive
             3 -> _events.trySend(TmuxEvent.LayoutChanged(parts[0], parts[1], parts[2], ""))
+
             2 -> _events.trySend(TmuxEvent.LayoutChanged(parts[0], parts[1], "", ""))
+
             else -> {} // malformed - ignore
         }
     }
@@ -189,7 +220,7 @@ class TmuxControlModeParser {
     private inline fun handleTwoArgs(
         line: String,
         prefixLen: Int,
-        factory: (String, String) -> TmuxEvent,
+        factory: (String, String) -> TmuxEvent
     ) {
         val rest = line.substring(prefixLen)
         val spaceIdx = rest.indexOf(' ')

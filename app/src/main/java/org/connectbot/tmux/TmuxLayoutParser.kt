@@ -11,7 +11,7 @@ sealed class TmuxLayoutNode {
         override val height: Int,
         override val x: Int,
         override val y: Int,
-        val paneId: Int,
+        val paneId: Int
     ) : TmuxLayoutNode()
 
     data class HSplit(
@@ -19,7 +19,7 @@ sealed class TmuxLayoutNode {
         override val height: Int,
         override val x: Int,
         override val y: Int,
-        val children: List<TmuxLayoutNode>,
+        val children: List<TmuxLayoutNode>
     ) : TmuxLayoutNode()
 
     data class VSplit(
@@ -27,7 +27,7 @@ sealed class TmuxLayoutNode {
         override val height: Int,
         override val x: Int,
         override val y: Int,
-        val children: List<TmuxLayoutNode>,
+        val children: List<TmuxLayoutNode>
     ) : TmuxLayoutNode()
 }
 
@@ -92,19 +92,23 @@ object TmuxLayoutParser {
                 val children = parseChildren(cursor, '}')
                 TmuxLayoutNode.VSplit(width, height, x, y, children)
             }
+
             '[' -> {
                 cursor.consume() // consume '['
                 val children = parseChildren(cursor, ']')
                 TmuxLayoutNode.HSplit(width, height, x, y, children)
             }
+
             ',' -> {
                 cursor.consume() // consume ','
                 val paneId = cursor.consumeInt()
                 TmuxLayoutNode.Leaf(width, height, x, y, paneId)
             }
+
             null -> throw IllegalArgumentException(
-                "Unexpected end of input after dimensions ${width}x${height},${x},${y}"
+                "Unexpected end of input after dimensions ${width}x$height,$x,$y"
             )
+
             else -> throw IllegalArgumentException(
                 "Unexpected character '${cursor.peek()}' at position ${cursor.pos}"
             )

@@ -35,7 +35,7 @@ fun TmuxPaneLayout(
     controller: TmuxController,
     activePaneId: String?,
     modifier: Modifier = Modifier,
-    onPaneTap: (() -> Unit)? = null,
+    onPaneTap: (() -> Unit)? = null
 ) {
     when (layoutNode) {
         is TmuxLayoutNode.Leaf -> {
@@ -52,7 +52,7 @@ fun TmuxPaneLayout(
                 modifier = modifier
                     .border(
                         width = if (isActive) 2.dp else 1.dp,
-                        color = borderColor,
+                        color = borderColor
                     )
             ) {
                 if (emulator != null) {
@@ -61,7 +61,7 @@ fun TmuxPaneLayout(
                         modifier = Modifier.fillMaxSize(),
                         initialFontSize = 10.sp,
                         keyboardEnabled = true,
-                        onTerminalTap = onPaneTap ?: {},
+                        onTerminalTap = onPaneTap ?: {}
                     )
                 }
             }
@@ -84,7 +84,7 @@ fun TmuxPaneLayout(
                         controller = controller,
                         activePaneId = activePaneId,
                         modifier = Modifier.weight(weight),
-                        onPaneTap = onPaneTap,
+                        onPaneTap = onPaneTap
                     )
                 }
             }
@@ -107,7 +107,7 @@ fun TmuxPaneLayout(
                         controller = controller,
                         activePaneId = activePaneId,
                         modifier = Modifier.weight(weight),
-                        onPaneTap = onPaneTap,
+                        onPaneTap = onPaneTap
                     )
                 }
             }

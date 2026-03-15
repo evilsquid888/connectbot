@@ -26,7 +26,7 @@ class DcsSequenceDetector {
         /** First byte index AFTER the DCS sequence in the current buffer. */
         val endIndex: Int = -1,
         /** True if the DCS sequence started in a previous buffer (partial match carried over). */
-        val startedInPreviousBuffer: Boolean = false,
+        val startedInPreviousBuffer: Boolean = false
     )
 
     /**
@@ -56,7 +56,7 @@ class DcsSequenceDetector {
                         found = true,
                         startIndex = startIdx,
                         endIndex = endIdx,
-                        startedInPreviousBuffer = startedInPrev,
+                        startedInPreviousBuffer = startedInPrev
                     )
                 }
             } else {

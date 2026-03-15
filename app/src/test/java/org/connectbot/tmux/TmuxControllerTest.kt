@@ -14,7 +14,7 @@ class TmuxControllerTest {
     private val testDispatchers = CoroutineDispatchers(
         default = testDispatcher,
         io = testDispatcher,
-        main = testDispatcher,
+        main = testDispatcher
     )
 
     private val writtenBytes = mutableListOf<ByteArray>()
@@ -23,33 +23,31 @@ class TmuxControllerTest {
     // Records of data written to pane terminal ops
     private val paneWrites = mutableMapOf<String, MutableList<ByteArray>>()
 
-    private fun createController(onExit: () -> Unit = {}): TmuxController {
-        return TmuxController(
-            writeFn = writeFn,
-            dispatchers = testDispatchers,
-            paneFactory = { paneId, cols, rows, onKeyInput ->
-                val writes = mutableListOf<ByteArray>()
-                paneWrites[paneId] = writes
-                TmuxPane(
-                    paneId = paneId,
-                    initialCols = cols,
-                    initialRows = rows,
-                    defaultFgColor = androidx.compose.ui.graphics.Color.White,
-                    defaultBgColor = androidx.compose.ui.graphics.Color.Black,
-                    onKeyboardInput = onKeyInput,
-                    terminalOpsFactory = { _ ->
-                        object : PaneTerminalOps {
-                            override fun writeInput(data: ByteArray) {
-                                writes.add(data)
-                            }
-                            override fun resize(cols: Int, rows: Int) {}
+    private fun createController(onExit: () -> Unit = {}): TmuxController = TmuxController(
+        writeFn = writeFn,
+        dispatchers = testDispatchers,
+        paneFactory = { paneId, cols, rows, onKeyInput ->
+            val writes = mutableListOf<ByteArray>()
+            paneWrites[paneId] = writes
+            TmuxPane(
+                paneId = paneId,
+                initialCols = cols,
+                initialRows = rows,
+                defaultFgColor = androidx.compose.ui.graphics.Color.White,
+                defaultBgColor = androidx.compose.ui.graphics.Color.Black,
+                onKeyboardInput = onKeyInput,
+                terminalOpsFactory = { _ ->
+                    object : PaneTerminalOps {
+                        override fun writeInput(data: ByteArray) {
+                            writes.add(data)
                         }
+                        override fun resize(cols: Int, rows: Int) {}
                     }
-                )
-            },
-            onExitControlMode = onExit,
-        )
-    }
+                }
+            )
+        },
+        onExitControlMode = onExit
+    )
 
     private fun registerPane(controller: TmuxController, paneId: String, cols: Int = 80, rows: Int = 24) {
         // Feed a layout change event to create the pane.

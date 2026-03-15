@@ -41,7 +41,7 @@ sealed class ConsoleTab {
         val gatewayBridge: TerminalBridge,
         val controller: TmuxController,
         val windowId: String,
-        val windowName: String,
+        val windowName: String
     ) : ConsoleTab()
 }
 
@@ -244,7 +244,7 @@ class ConsoleViewModel @Inject constructor(
                             gatewayBridge = bridge,
                             controller = controller,
                             windowId = window.windowId,
-                            windowName = window.name,
+                            windowName = window.name
                         )
                     )
                 }

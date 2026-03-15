@@ -17,7 +17,7 @@ sealed class TmuxEvent {
     data class CommandResponse(
         val commandNum: Int,
         val output: String,
-        val isError: Boolean,
+        val isError: Boolean
     ) : TmuxEvent()
 
     // Window notifications
@@ -41,7 +41,7 @@ sealed class TmuxEvent {
         val windowId: String,
         val layout: String,
         val visibleLayout: String,
-        val rawFlags: String,
+        val rawFlags: String
     ) : TmuxEvent()
 
     data class PaneModeChanged(val paneId: String) : TmuxEvent()

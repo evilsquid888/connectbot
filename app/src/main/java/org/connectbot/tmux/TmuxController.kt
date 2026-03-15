@@ -35,7 +35,7 @@ class TmuxController(
         { paneId, cols, rows, onKeyInput ->
             TmuxPane(paneId, cols, rows, defaultFgColor, defaultBgColor, onKeyInput)
         },
-    private val onExitControlMode: () -> Unit = {},
+    private val onExitControlMode: () -> Unit = {}
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatchers.default)
 
@@ -48,7 +48,7 @@ class TmuxController(
         val windowId: String,
         val name: String,
         val layout: TmuxLayoutNode? = null,
-        val activePaneId: String? = null,
+        val activePaneId: String? = null
     )
 
     private val _windows = MutableStateFlow<List<TmuxWindowState>>(emptyList())
@@ -97,10 +97,10 @@ class TmuxController(
             val parts = line.split(' ', limit = 4)
             if (parts.size < 4) continue
 
-            val windowId = parts[0]    // @0
-            val name = parts[1]        // bash
-            val layout = parts[2]      // layout string
-            val active = parts[3]      // 1 or 0
+            val windowId = parts[0] // @0
+            val name = parts[1] // bash
+            val layout = parts[2] // layout string
+            val active = parts[3] // 1 or 0
 
             if (active == "1") activeWinId = windowId
 
@@ -142,7 +142,7 @@ class TmuxController(
                     windowId = windowId,
                     name = name,
                     layout = layoutNode,
-                    activePaneId = activePaneId,
+                    activePaneId = activePaneId
                 )
             )
         }
@@ -167,13 +167,19 @@ class TmuxController(
     internal fun handleEvent(event: TmuxEvent) {
         when (event) {
             is TmuxEvent.PaneOutput -> routeOutput(event.paneId, event.data)
+
             is TmuxEvent.ExtendedOutput -> routeOutput(event.paneId, event.data)
+
             is TmuxEvent.CommandResponse -> sender.onCommandResponse(event)
 
             is TmuxEvent.WindowAdd -> handleWindowAdd(event.windowId)
+
             is TmuxEvent.WindowClose -> handleWindowClose(event.windowId)
+
             is TmuxEvent.WindowRenamed -> handleWindowRenamed(event.windowId, event.name)
+
             is TmuxEvent.WindowPaneChanged -> handleWindowPaneChanged(event.windowId, event.paneId)
+
             is TmuxEvent.SessionWindowChanged -> _activeWindowId.value = event.windowId
 
             is TmuxEvent.LayoutChanged -> handleLayoutChanged(event.windowId, event.layout)
@@ -181,6 +187,7 @@ class TmuxController(
             is TmuxEvent.Exit -> handleExit(event.reason)
 
             is TmuxEvent.Pause -> { /* TODO: flow control */ }
+
             is TmuxEvent.Continue -> { /* TODO: flow control */ }
 
             // Events we don't need to handle in the controller
@@ -210,7 +217,7 @@ class TmuxController(
     private fun handleWindowAdd(windowId: String) {
         _windows.value = _windows.value + TmuxWindowState(
             windowId = windowId,
-            name = windowId,  // Will be updated by WindowRenamed
+            name = windowId // Will be updated by WindowRenamed
         )
     }
 
@@ -258,7 +265,9 @@ class TmuxController(
                     }
                 }
             }
+
             is TmuxLayoutNode.HSplit -> node.children.forEach { createPanesFromLayout(it) }
+
             is TmuxLayoutNode.VSplit -> node.children.forEach { createPanesFromLayout(it) }
         }
     }

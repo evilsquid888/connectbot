@@ -806,7 +806,7 @@ class TerminalBridge {
             dispatchers = dispatchers,
             defaultFgColor = androidx.compose.ui.graphics.Color(fullColorPalette[defaultFg]),
             defaultBgColor = androidx.compose.ui.graphics.Color(fullColorPalette[defaultBg]),
-            onExitControlMode = { exitTmuxControlMode() },
+            onExitControlMode = { exitTmuxControlMode() }
         )
 
         tmuxController = controller
